@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/Fantom-foundation/lachesis-base/gossip/dagprocessor"
 	"github.com/Fantom-foundation/lachesis-base/hash"
@@ -194,6 +195,10 @@ func (s *Service) ReprocessEpochEvents() {
 	s.bootstrapping = false
 }
 
+var tcommit = time.Duration(0)
+var tewhole = time.Duration(0)
+var te = time.Duration(0)
+
 // processEvent extends the engine.Process with gossip-specific actions on each event processing
 func (s *Service) processEvent(e *inter.EventPayload) error {
 	// s.engineMu is locked here
@@ -205,6 +210,10 @@ func (s *Service) processEvent(e *inter.EventPayload) error {
 	}
 	atomic.StoreUint32(&s.eventBusyFlag, 1)
 	defer atomic.StoreUint32(&s.eventBusyFlag, 0)
+	start := time.Now()
+	defer func() {
+		tewhole += time.Since(start)
+	}()
 
 	// repeat the checks under the mutex which may depend on volatile data
 	if s.store.HasEvent(e.ID()) {
@@ -237,10 +246,12 @@ func (s *Service) processEvent(e *inter.EventPayload) error {
 
 	processedEventsMeter.Mark(1)
 
+	estart := time.Now()
 	err = s.saveAndProcessEvent(e, &es)
 	if err != nil {
 		return err
 	}
+	te += time.Since(estart)
 
 	newEpoch := s.store.GetEpoch()
 
@@ -254,7 +265,9 @@ func (s *Service) processEvent(e *inter.EventPayload) error {
 		s.switchEpochTo(newEpoch)
 	}
 
+	cstart := time.Now()
 	s.mayCommit(newEpoch != oldEpoch)
+	tcommit += time.Since(cstart)
 
 	if s.haltCheck != nil && s.haltCheck(oldEpoch, newEpoch, e.MedianTime().Time()) {
 		// halt syncing

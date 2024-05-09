@@ -3,6 +3,7 @@ package evmmodule
 import (
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -24,6 +25,8 @@ func New() *EVMModule {
 	return &EVMModule{}
 }
 
+var tt = time.Duration(0)
+
 func (p *EVMModule) Start(block iblockproc.BlockCtx, statedb state.StateDB, reader evmcore.DummyChain, onNewLog func(*types.Log), net opera.Rules, evmCfg *params.ChainConfig) blockproc.EVMProcessor {
 	var prevBlockHash common.Hash
 	if block.Idx != 0 {
@@ -31,7 +34,9 @@ func (p *EVMModule) Start(block iblockproc.BlockCtx, statedb state.StateDB, read
 	}
 
 	// Start block
+	start := time.Now()
 	statedb.BeginBlock(uint64(block.Idx))
+	tt += time.Since(start)
 
 	return &OperaEVMProcessor{
 		block:         block,
@@ -89,11 +94,13 @@ func (p *OperaEVMProcessor) Execute(txs types.Transactions) types.Receipts {
 
 	// Process txs
 	evmBlock := p.evmBlockWith(txs)
+	start := time.Now()
 	receipts, _, skipped, err := evmProcessor.Process(evmBlock, p.statedb, opera.DefaultVMConfig, &p.gasUsed, func(l *types.Log) {
 		// Note: l.Index is properly set before
 		l.TxIndex += txsOffset
 		p.onNewLog(l)
 	})
+	tt += time.Since(start)
 	if err != nil {
 		log.Crit("EVM internal error", "err", err)
 	}
@@ -123,7 +130,9 @@ func (p *OperaEVMProcessor) Finalize() (evmBlock *evmcore.EvmBlock, skippedTxs [
 	receipts = p.receipts
 
 	// Commit block
+	start := time.Now()
 	p.statedb.EndBlock(evmBlock.Number.Uint64())
+	tt += time.Since(start)
 
 	// Get state root
 	newStateHash, err := p.statedb.Commit(true)
@@ -131,6 +140,7 @@ func (p *OperaEVMProcessor) Finalize() (evmBlock *evmcore.EvmBlock, skippedTxs [
 		log.Crit("Failed to commit state", "err", err)
 	}
 	evmBlock.Root = newStateHash
+	println("evm", tt.String())
 
 	return
 }

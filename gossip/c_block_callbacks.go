@@ -38,10 +38,10 @@ var (
 	blockExecutionTimer = metrics.GetOrRegisterTimer("chain/execution", nil)
 	blockAgeGauge       = metrics.GetOrRegisterGauge("chain/block/age", nil)
 
-	processedTxsMeter = metrics.GetOrRegisterMeter("chain/txs/processed", nil)
+	processedTxsMeter    = metrics.GetOrRegisterMeter("chain/txs/processed", nil)
 	skippedTxsMeter      = metrics.GetOrRegisterMeter("chain/txs/skipped", nil)
 	confirmedEventsMeter = metrics.GetOrRegisterMeter("chain/events/confirmed", nil) // events received from lachesis
-	spilledEventsMeter   = metrics.GetOrRegisterMeter("chain/events/spilled", nil) // tx excluded because of MaxBlockGas
+	spilledEventsMeter   = metrics.GetOrRegisterMeter("chain/events/spilled", nil)   // tx excluded because of MaxBlockGas
 )
 
 type ExtendedTxPosition struct {
@@ -66,6 +66,9 @@ func (s *Service) GetConsensusCallbacks() lachesis.ConsensusCallbacks {
 		),
 	}
 }
+
+var tt = time.Duration(0)
+var tt_c = time.Duration(0)
 
 // consensusCallbackBeginBlockFn takes only necessaries for block processing and
 // makes lachesis.BeginBlockFn.
@@ -93,6 +96,9 @@ func consensusCallbackBeginBlockFn(
 		}
 		wg.Wait()
 		start := time.Now()
+		defer func() {
+			tt_c += time.Since(start)
+		}()
 
 		// Note: take copies to avoid race conditions with API calls
 		bs := store.GetBlockState().Copy()
@@ -413,6 +419,15 @@ func consensusCallbackBeginBlockFn(
 					log.Info("New block", "index", blockCtx.Idx, "id", block.Atropos, "gas_used",
 						evmBlock.GasUsed, "txs", fmt.Sprintf("%d/%d", len(evmBlock.Transactions), len(block.SkippedTxs)),
 						"age", utils.PrettyDuration(blockAge), "t", utils.PrettyDuration(now.Sub(start)))
+					tt += now.Sub(start)
+					if blockCtx.Idx%10 == 0 {
+						println("blocks", tt.String())
+						println("blocks_c", tt_c.String())
+						println("events whole", tewhole.String())
+						println("events", te.String())
+						println("events only", (te - tt_c).String())
+						println("commits", tcommit.String())
+					}
 					blockAgeGauge.Update(int64(blockAge.Nanoseconds()))
 
 					processedTxsMeter.Mark(int64(len(evmBlock.Transactions)))
@@ -458,7 +473,7 @@ func spillBlockEvents(store *Store, block *inter.Block, network opera.Rules) (*i
 		// stop if limit is exceeded, erase [:i] events
 		if gasPowerUsedSum > network.Blocks.MaxBlockGas {
 			// spill
-			spilledEventsMeter.Mark(int64(len(fullEvents)-(i+1)))
+			spilledEventsMeter.Mark(int64(len(fullEvents) - (i + 1)))
 			block.Events = block.Events[i+1:]
 			fullEvents = fullEvents[i+1:]
 			break

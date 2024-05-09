@@ -212,7 +212,7 @@ func lachesisMain(ctx *cli.Context) error {
 		return err
 	}
 
-	metrics.SetDataDir(cfg.Node.DataDir) // report disk space usage into metrics
+	//metrics.SetDataDir(cfg.Node.DataDir) // report disk space usage into metrics
 
 	node, _, nodeClose, err := config.MakeNode(ctx, cfg)
 	if err != nil {

@@ -5,6 +5,14 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"io"
+	"math"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
 	"github.com/Fantom-foundation/go-opera/config"
 	"github.com/Fantom-foundation/go-opera/gossip"
 	"github.com/Fantom-foundation/go-opera/gossip/emitter"
@@ -17,13 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/status-im/keycard-go/hexutils"
 	"gopkg.in/urfave/cli.v1"
-	"io"
-	"math"
-	"os"
-	"os/signal"
-	"strings"
-	"syscall"
-	"time"
 )
 
 func EventsImport(ctx *cli.Context, files ...string) error {
@@ -47,6 +48,7 @@ func EventsImport(ctx *cli.Context, files ...string) error {
 	cfg.Node.P2P.StaticNodes = nil
 	cfg.Node.P2P.TrustedNodes = nil
 
+	prev = time.Now()
 	node, svc, nodeClose, err := config.MakeNode(ctx, cfg)
 	if err != nil {
 		return err
@@ -56,6 +58,8 @@ func EventsImport(ctx *cli.Context, files ...string) error {
 	if err := node.Start(); err != nil {
 		return fmt.Errorf("error starting protocol stack: %w", err)
 	}
+	println("==+==", "started", time.Since(prev)/time.Second)
+	prev = time.Now()
 
 	for _, fn := range files {
 		log.Info("Importing events from file", "file", fn)
@@ -63,6 +67,8 @@ func EventsImport(ctx *cli.Context, files ...string) error {
 			log.Error("Import error", "file", fn, "err", err)
 			return err
 		}
+		println("==+==", "imported", time.Since(prev)/time.Second)
+		prev = time.Now()
 	}
 	return nil
 }
@@ -83,6 +89,8 @@ func checkEventsFileHeader(reader io.Reader) error {
 	}
 	return nil
 }
+
+var prev time.Time
 
 func importEventsFile(srv *gossip.Service, fn string) error {
 	// Watch for Ctrl-C while the import is running.

@@ -25,7 +25,7 @@ func New() *EVMModule {
 	return &EVMModule{}
 }
 
-var tt = time.Duration(0)
+var Tt = time.Duration(0)
 
 func (p *EVMModule) Start(block iblockproc.BlockCtx, statedb state.StateDB, reader evmcore.DummyChain, onNewLog func(*types.Log), net opera.Rules, evmCfg *params.ChainConfig) blockproc.EVMProcessor {
 	var prevBlockHash common.Hash
@@ -36,7 +36,7 @@ func (p *EVMModule) Start(block iblockproc.BlockCtx, statedb state.StateDB, read
 	// Start block
 	start := time.Now()
 	statedb.BeginBlock(uint64(block.Idx))
-	tt += time.Since(start)
+	Tt = time.Since(start)
 
 	return &OperaEVMProcessor{
 		block:         block,
@@ -100,7 +100,7 @@ func (p *OperaEVMProcessor) Execute(txs types.Transactions) types.Receipts {
 		l.TxIndex += txsOffset
 		p.onNewLog(l)
 	})
-	tt += time.Since(start)
+	Tt += time.Since(start)
 	if err != nil {
 		log.Crit("EVM internal error", "err", err)
 	}
@@ -132,7 +132,7 @@ func (p *OperaEVMProcessor) Finalize() (evmBlock *evmcore.EvmBlock, skippedTxs [
 	// Commit block
 	start := time.Now()
 	p.statedb.EndBlock(evmBlock.Number.Uint64())
-	tt += time.Since(start)
+	Tt += time.Since(start)
 
 	// Get state root
 	newStateHash, err := p.statedb.Commit(true)
@@ -140,7 +140,6 @@ func (p *OperaEVMProcessor) Finalize() (evmBlock *evmcore.EvmBlock, skippedTxs [
 		log.Crit("Failed to commit state", "err", err)
 	}
 	evmBlock.Root = newStateHash
-	println("evm", tt.String())
 
 	return
 }

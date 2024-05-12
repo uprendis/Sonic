@@ -442,7 +442,7 @@ func consensusCallbackBeginBlockFn(
 					processedTxsMeter.Mark(int64(len(evmBlock.Transactions)))
 					skippedTxsMeter.Mark(int64(len(block.SkippedTxs)))
 				}
-				if confirmedEvents.Len() != 0 {
+				if false { //confirmedEvents.Len() != 0 {
 					atomic.StoreUint32(blockBusyFlag, 1)
 					wg.Add(1)
 					err := parallelTasks.Enqueue(func() {

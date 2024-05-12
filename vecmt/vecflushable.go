@@ -48,10 +48,12 @@ func (w *VecFlushable) Has(key []byte) (bool, error) {
 	if w.modified == nil {
 		return false, errClosed
 	}
+	println("has modified")
 	_, ok := w.modified[string(key)]
 	if ok {
 		return true, nil
 	}
+	println("has underlying")
 	return w.underlying.Has(key)
 }
 
@@ -59,9 +61,11 @@ func (w *VecFlushable) Get(key []byte) ([]byte, error) {
 	if w.modified == nil {
 		return nil, errClosed
 	}
+	println("get modified")
 	if val, ok := w.modified[string(key)]; ok {
 		return common.CopyBytes(val), nil
 	}
+	println("get underlying")
 	return w.underlying.Get(key)
 }
 
@@ -69,6 +73,7 @@ func (w *VecFlushable) Put(key []byte, value []byte) error {
 	if value == nil || key == nil {
 		return errors.New("vecflushable: key or value is nil")
 	}
+	println("put")
 	w.modified[string(key)] = common.CopyBytes(value)
 	w.memSize += mapMemEst(len(key), len(value))
 	return nil

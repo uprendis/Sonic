@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/Fantom-foundation/lachesis-base/gossip/dagprocessor"
 	"github.com/Fantom-foundation/lachesis-base/hash"
@@ -87,6 +88,8 @@ func (s *Service) processSavedEvent(e *inter.EventPayload, es *iblockproc.EpochS
 	// aBFT processing
 	return s.engine.Process(e)
 }
+
+var debug_eventProcT = time.Duration(0)
 
 // saveAndProcessEvent deletes event in a case if it fails validation during event processing
 func (s *Service) saveAndProcessEvent(e *inter.EventPayload, es *iblockproc.EpochState) error {
@@ -237,10 +240,12 @@ func (s *Service) processEvent(e *inter.EventPayload) error {
 
 	processedEventsMeter.Mark(1)
 
+	start := time.Now()
 	err = s.saveAndProcessEvent(e, &es)
 	if err != nil {
 		return err
 	}
+	debug_eventProcT += time.Since(start)
 
 	newEpoch := s.store.GetEpoch()
 

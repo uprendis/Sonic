@@ -67,6 +67,8 @@ func (s *Service) GetConsensusCallbacks() lachesis.ConsensusCallbacks {
 	}
 }
 
+var debug_blockProcT = time.Duration(0)
+
 // consensusCallbackBeginBlockFn takes only necessaries for block processing and
 // makes lachesis.BeginBlockFn.
 func consensusCallbackBeginBlockFn(
@@ -188,6 +190,9 @@ func consensusCallbackBeginBlockFn(
 				confirmedEventsMeter.Mark(1)
 			},
 			EndBlock: func() (newValidators *pos.Validators) {
+				defer func() {
+					debug_blockProcT += time.Since(start)
+				}()
 				if atroposTime <= bs.LastBlock.Time {
 					atroposTime = bs.LastBlock.Time + 1
 				}
@@ -413,12 +418,15 @@ func consensusCallbackBeginBlockFn(
 					log.Info("New block", "index", blockCtx.Idx, "id", block.Atropos, "gas_used",
 						evmBlock.GasUsed, "txs", fmt.Sprintf("%d/%d", len(evmBlock.Transactions), len(block.SkippedTxs)),
 						"age", utils.PrettyDuration(blockAge), "t", utils.PrettyDuration(now.Sub(start)))
+					println("Block proc: ", debug_blockProcT.String(), debug_blockProcT/time.Millisecond)
+					eOnly := debug_eventProcT - debug_blockProcT
+					println("Event proc: ", eOnly.String(), eOnly/time.Millisecond)
 					blockAgeGauge.Update(int64(blockAge.Nanoseconds()))
 
 					processedTxsMeter.Mark(int64(len(evmBlock.Transactions)))
 					skippedTxsMeter.Mark(int64(len(block.SkippedTxs)))
 				}
-				if confirmedEvents.Len() != 0 {
+				if false && confirmedEvents.Len() != 0 {
 					atomic.StoreUint32(blockBusyFlag, 1)
 					wg.Add(1)
 					err := parallelTasks.Enqueue(func() {
